@@ -469,7 +469,10 @@
   };
 
   const STORAGE_KEY = "tablelens.lang";
-  let current = "uk";
+  // Мова за замовчуванням — англійська (для міжнародної аудиторії GitHub Pages).
+  // Збережений вибір користувача має пріоритет.
+  const DEFAULT_LANG = "en";
+  let current = DEFAULT_LANG;
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved && STRINGS[saved]) current = saved;
@@ -477,9 +480,9 @@
 
   // t("ключ") або t("ключ", {n: 3}) — підстановка {n} у рядок.
   function t(key, vars) {
-    const dict = STRINGS[current] || STRINGS.uk;
+    const dict = STRINGS[current] || STRINGS[DEFAULT_LANG];
     let s = dict[key];
-    if (s == null) s = (STRINGS.uk[key] != null ? STRINGS.uk[key] : key);
+    if (s == null) s = (STRINGS[DEFAULT_LANG][key] != null ? STRINGS[DEFAULT_LANG][key] : key);
     if (vars) {
       for (const k in vars) s = s.split("{" + k + "}").join(vars[k]);
     }
