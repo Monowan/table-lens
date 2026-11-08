@@ -240,12 +240,29 @@ const MaskManager = (() => {
       if (!pairs || !pairs.length) return r;
       const newText = applyReplacesToText(r.text == null ? "" : r.text, pairs);
       if (newText === r.text) return r;
-      return Object.assign({}, r, { text: newText });
+      // Порожнє/сміттєве значення зберігаємо як один пробіл —
+      // так комірка лишається «порожньою», а не «невідповідною».
+      const normalized = isBlankText(newText) ? " " : newText;
+      return Object.assign({}, r, { text: normalized });
     });
   }
 
   // Повертає масив «проблемних» результатів: тих, що не відповідають масці.
   // results — масив [{ row, col, text, ... }].
+  //
+  // ВАЖЛИВО про порожні комірки:
+  //   · порожня комірка / комірка з самих пробілів / «сміття» з крапок і маркерів
+  //     НЕ вважається невідповідною масці — її просто заповнюємо пробілом;
+  //   · розпізнане «сміття» ("...", "·", "•", "_", "|") теж нормалізується
+  //     в пробіл, інакше одна пляма від лінії валила валідний рядок.
+  function isBlankText(value) {
+    if (value == null) return true;
+    const s = String(value).trim();
+    if (s === "") return true;
+    // лише маркери/крапки/підкреслення/риски — це не дані, а артефакт OCR.
+    return /^[.·•\-_|~\s]+$/.test(s);
+  }
+
   function validateResults(results) {
     const mask = getActiveMask();
     if (!mask) return [];
@@ -253,19 +270,32 @@ const MaskManager = (() => {
     for (const r of results) {
       const rule = (mask.cells || {})[r.row + "," + r.col];
       if (!rule) continue; // немає правила → не перевіряємо
-      const text = (r.text == null ? "" : r.text).trim();
-      if (!text) continue; // порожня комірка не вважається «невідповідною» за форматом
+      // Порожню комірку не вважаємо помилкою формату (її заповнить користувач).
+      if (isBlankText(r.text)) continue;
+      const text = String(r.text).trim();
       let ok = false;
       try {
-        // ВАЖЛИВО: правило перевіряє значення ПОВНІСТЮ (anchored).
+        // ПРАВИЛО ПЕРЕВІРЯЄ ЗНАЧЕННЯ ПОВНІСТЮ (anchored).
         // Без ^...$ вираз «\d{2}» пропустив би «1234» як валідне.
-        ok = new RegExp("^" + rule + "$").test(text);
+        // Якщо користувач сам написав ^...$ — не дублюємо якорі.
+        ok = compileRule(rule).test(text);
       } catch (e) {
         ok = false; // некоректний regex — трактуємо як невідповідність
       }
       if (!ok) problems.push(r);
     }
     return problems;
+  }
+
+  // Компілює правило в RegExp з якорями ^...$, якщо їх ще немає.
+  function compileRule(rule) {
+    let src = String(rule == null ? "" : rule);
+    if (!src) throw new Error("empty rule");
+    const anchoredStart = src.startsWith("^");
+    const anchoredEnd = src.endsWith("$") && !src.endsWith("\\$");
+    if (!anchoredStart) src = "^" + src;
+    if (!anchoredEnd) src = src + "$";
+    return new RegExp(src);
   }
 
   // ---------- Побудова regex з чекбоксів ----------
@@ -281,7 +311,10 @@ const MaskManager = (() => {
     const classes = [];
     if (digit) classes.push("\\d");
     if (letter) classes.push("a-zA-Zа-яА-ЯіІїЇєЄґҐ");
-    if (sign) classes.push("\\s.,\\-/+()%№");
+    // Знаки: пробіли, підкреслення, крапки/коми, дефіс, слеш, плюс,
+    // дужки, відсоток, номер, апостроф, лапки, двокрапка, крапка з комою,
+    // зірочка, решітка — усе, що реально трапляється в таблицях.
+    if (sign) classes.push("\\s_.,\\-/+()%№'\"`:;*#<>=«»“”„‹›!?@&$");
     if (!classes.length) return null; // нічого не вибрано
 
     return "[" + classes.join("") + "]+";
@@ -431,7 +464,7 @@ const MaskManager = (() => {
       const inner = m[1];
       if (inner.includes("\\d")) document.getElementById("maskDigitChk").checked = true;
       if (/a-zA-Zа-яА-Я/.test(inner)) document.getElementById("maskLetterChk").checked = true;
-      if (/\\s|\.|,|-|\//.test(inner)) document.getElementById("maskSignChk").checked = true;
+      if (/\\s|\.|,|-|\/|_|\(|\)|%|№/.test(inner)) document.getElementById("maskSignChk").checked = true;
       return;
     }
 
@@ -737,6 +770,7 @@ const MaskManager = (() => {
     deleteMask,
     upsertMask,
     validateResults,
+    isBlankText,
     applyReplaces,
     refreshSelect,
     isActive: () => !!activeMaskId,

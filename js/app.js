@@ -1305,9 +1305,11 @@ function matToDataUrl(mat) {
 function renderResults() {
   const total = state.results.length;
 
-  // 1) Комірки з відсутнім значенням (порожній рядок).
+  // 1) Порожні комірки НЕ вважаються помилкою — просто заповнюються пробілом,
+  //    щоб у CSV/Excel лишилась клітинка, а не зсув рядка.
   const isEmpty = (x) => (x == null ? "" : String(x)).trim() === "";
-  const emptyProblems = state.results.filter((r) => isEmpty(r.text));
+  const blankResults = state.results.filter((r) => isEmpty(r.text));
+  for (const r of blankResults) r.text = " ";
 
   // 2) Комірки, що НЕ відповідають активній масці (помаранчеві).
   let maskProblems = [];
@@ -1317,23 +1319,14 @@ function renderResults() {
     maskProblems = [];
   }
 
-  // Об'єднуємо (за row,col) без дублів.
-  const seen = new Set();
+  // «Проблеми» — тільки невідповідність масці. Порожні комірки сюди не входять:
+  // вони вже нормалізовані в пробіл і показуються окремим лічильником.
+  const kind = {}; // key -> 'mask'
   const problems = [];
-  const kind = {}; // key -> 'empty' | 'mask'
-  for (const r of emptyProblems) {
-    const key = r.row + "," + r.col;
-    seen.add(key);
-    problems.push(r);
-    kind[key] = "empty";
-  }
   for (const r of maskProblems) {
     const key = r.row + "," + r.col;
-    if (!seen.has(key)) {
-      seen.add(key);
-      problems.push(r);
-      kind[key] = "mask";
-    }
+    problems.push(r);
+    kind[key] = "mask";
   }
 
   const auto = total - problems.length;
@@ -1342,6 +1335,10 @@ function renderResults() {
   document.getElementById("mTotal").textContent = total;
   document.getElementById("mAuto").textContent = auto;
   document.getElementById("mProblem").textContent = problems.length;
+  const mBlank = document.getElementById("mBlank");
+  if (mBlank) mBlank.textContent = blankResults.length;
+  const mBlankWrap = document.getElementById("mBlankWrap");
+  if (mBlankWrap) mBlankWrap.style.display = blankResults.length ? "block" : "none";
 
   document.getElementById("overlayBtn").style.display = "inline-block";
   document.getElementById("exportCsvBtn").style.display = "inline-block";
@@ -1391,8 +1388,7 @@ function renderResults() {
       });
       const cap = document.createElement("div");
       cap.className = "hint";
-      cap.textContent = `(${r.row},${r.col})` +
-        (isMask ? t("s3.badMaskSuffix") : t("s3.emptySuffix"));
+      cap.textContent = `(${r.row},${r.col})` + t("s3.badMaskSuffix");
       card.appendChild(img);
       card.appendChild(cap);
       card.appendChild(input);
