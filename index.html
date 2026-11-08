@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Table Lens</title>
+  <link rel="stylesheet" href="css/style.css?v=20261110s">
+</head>
+<body>
+  <header class="topbar">
+    <!-- Налаштування (крайній лівий кут) -->
+    <div class="settings-wrap" id="settingsWrap">
+      <button class="settings-btn" id="settingsBtn" aria-haspopup="true" aria-expanded="false" data-i18n-title="settings.title" title="Налаштування">⚙️</button>
+      <div class="settings-menu" id="settingsMenu" role="menu" aria-label="Налаштування">
+        <div class="settings-item has-sub" tabindex="0" role="menuitem">
+          <span class="si-label">🌐 <span data-i18n="settings.language">Мова</span></span>
+          <span class="si-value" id="langValue">Українська</span>
+          <span class="si-arrow">›</span>
+          <div class="settings-sub" role="menu">
+            <button class="sub-item active" data-lang="uk" role="menuitemradio" aria-checked="true">Українська</button>
+            <button class="sub-item" data-lang="en" role="menuitemradio" aria-checked="false">English</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h1 class="logo">📋 Table Lens <span class="logo-sub" data-i18n="app.tagline">OCR-розпізнавання таблиць з фото → Excel / CSV</span></h1>
+    <div class="topbar-actions">
+      <div class="view-switch" id="viewSwitch" role="tablist">
+        <button class="view-btn" data-view="original" data-i18n="view.original">Оригінал</button>
+        <button class="view-btn active" data-view="processed" data-i18n="view.processed">Після обробки</button>
+        <button class="view-btn" data-view="overlay" data-i18n="view.overlay">Розпізнаний текст</button>
+      </div>
+      <button class="btn btn-ghost" id="resetBtn" data-i18n="btn.reset">↩️ Скинути</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- Полотно із зображенням -->
+    <section class="canvas-area">
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="mainCanvas"></canvas>
+        <div class="placeholder" id="placeholder">
+          <p data-i18n="placeholder.upload">👈 Завантажте зображення або згенеруйте демо</p>
+        </div>
+      </div>
+      <div class="canvas-caption" id="canvasCaption" data-i18n="caption.working">Робоче зображення</div>
+
+      <!-- Галерея кадрів (пакетний режим, >1 зображення) — притиснута до низу -->
+      <div class="gallery-bar" id="frameGallery" style="display:none">
+        <div class="frame-gallery" id="frameList"></div>
+      </div>
+    </section>
+
+    <!-- Панель інструментів (покроково) -->
+    <aside class="toolbar">
+      <nav class="steps">
+        <button class="step-btn active" data-step="1" data-i18n="step1.tab">1 · Підготовка</button>
+        <button class="step-btn" data-step="2" data-i18n="step2.tab">2 · Комірки</button>
+        <button class="step-btn" data-step="3" data-i18n="step3.tab">3 · Розпізнавання</button>
+        <button class="step-btn" data-step="4" data-i18n="step4.tab">4 · Експорт</button>
+      </nav>
+
+      <div class="step-panel" id="step1">
+        <h2 data-i18n="step1.title">Підготовка</h2>
+
+        <div class="field">
+          <label class="field-label" for="fileInput" data-i18n="s1.upload">Завантажити зображення</label>
+          <label class="btn btn-outline file-pick" for="fileInput">
+            <span id="filePickLabel" data-i18n="s1.chooseFiles">📁 Вибрати файли</span>
+          </label>
+          <input type="file" id="fileInput" accept="image/*" multiple class="file-input-hidden">
+          <button class="btn btn-outline" id="demoBtn" data-i18n="s1.demo">🎲 Згенерувати демо</button>
+        </div>
+
+        <div class="field">
+          <label class="field-label" data-i18n="s1.rotate">Поворот</label>
+          <div class="row">
+            <button class="btn" id="rotLeftBtn" data-i18n="s1.rotLeft">↻ 90° вліво</button>
+            <button class="btn" id="rotRightBtn" data-i18n="s1.rotRight">↺ 90° вправо</button>
+            <button class="btn tool-toggle" id="cropToolBtn" aria-pressed="false" data-i18n-title="s1.cropToolTitle" data-i18n="s1.cropTool" title="Обрізка та довільний кут">✂️ Обрізка</button>
+          </div>
+        </div>
+
+        <!-- Інструмент «Обрізка»: розкривається кнопкою ✂️ Обрізка -->
+        <div class="field" id="cropToolPanel" style="display:none">
+          <label class="field-label" data-i18n="s1.cropTitle">✂️ Обрізка та довільний кут</label>
+          <p class="hint" data-i18n="s1.cropHint">Тягни рамку за кути/ребра на зображенні.</p>
+
+          <div class="slider-head">
+            <label class="field-label" for="angleSlider"><span data-i18n="s1.angle">Довільний кут:</span> <span id="angleVal">0°</span></label>
+            <span class="help-tip" tabindex="0" role="button" data-i18n-tip="s1.angleTip" aria-label="Що робить довільний кут" data-tip="Поворот зображення на довільний кут від -45° до +45°. Потрібен, коли фото стола зроблено з нахилом. Поворот застосовується до базового зображення, тому не накопичується. Для точного вирівняння краще використати «Ручну перспективу».">?</span>
+          </div>
+          <input type="range" id="angleSlider" min="-45" max="45" step="0.5" value="0">
+
+          <div class="row">
+            <button class="btn btn-primary" id="applyCropBtn" data-i18n="s1.applyCrop">✂️ Застосувати</button>
+            <button class="btn" id="resetCropBtn" data-i18n="s1.resetCrop">↩️ Скинути рамку</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label" data-i18n="s1.preprocess">Попередня обробка</label>
+          <label class="checkbox"><input type="checkbox" id="lightChk"> <span data-i18n="s1.lightChk">Нормалізація освітлення</span></label>
+          <div class="field" id="lightLevelWrap" style="display:none">
+            <div class="slider-head">
+              <label class="field-label" for="lightLevel"><span data-i18n="s1.level">Рівень:</span> <span id="lightLevelVal">50</span>%</label>
+              <span class="help-tip" tabindex="0" role="button" data-i18n-tip="s1.levelTip" aria-label="Що робить рівень нормалізації" data-tip="Сила вирівнювання контрасту: 0% — оригінал без змін, 100% — максимальна корекція. Допомагає при нерівному освітленні та тінях. Занадто високий рівень може «вибити» блідий текст або додати шум — тоді знизь.">?</span>
+            </div>
+            <input type="range" id="lightLevel" min="0" max="100" step="1" value="50">
+          </div>
+          <div class="field">
+            <label class="field-label" data-i18n="s1.persp">Ручна перспектива</label>
+            <button class="btn" id="manualPerspBtn" data-i18n="s1.perspBtn">📐 Позначити кути</button>
+            <button class="btn btn-primary" id="applyManualPerspBtn" style="display:none" data-i18n="s1.perspApply">✅ Вирівняти</button>
+            <p class="hint" id="manualPerspHint" data-i18n="s1.perspHint">Клікни по 4 кутах таблиці (вліво-вгорі → вправо-вгорі → вправо-внизу → вліво-внизу).</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-panel hidden" id="step2">
+        <h2 data-i18n="step2.title">Комірки</h2>
+
+        <div class="field">
+          <label class="field-label" data-i18n="s2.detect">Детекція комірок</label>
+          <button class="btn btn-primary" id="detectBtn" data-i18n="s2.detectBtn">🔲 Визначити комірки</button>
+          <p class="hint" id="gridInfo"></p>
+        </div>
+
+        <div class="field">
+          <label class="field-label" data-i18n="s2.edit">Редагування комірок</label>
+          <button class="btn" id="drawCellBtn" data-i18n="s2.draw">✏️ Малювати комірку</button>
+          <button class="btn" id="deleteCellBtn" style="display:none" data-i18n="s2.delete">🗑 Видалити виділену</button>
+          <p class="hint" data-i18n="s2.editHint">Клікни по комірці, щоб виділити її. Тягни за кути для зміни форми, за середину — для переміщення. Delete/Backspace — видалити.</p>
+        </div>
+
+        <div class="field">
+          <label class="field-label" data-i18n="s2.params">Параметри детекції</label>
+          <div class="slider-head">
+            <label class="field-label" for="minAreaSlider"><span data-i18n="s2.minArea">Мін. площа комірки:</span> <span id="minAreaVal">0.10</span>%</label>
+            <span class="help-tip" tabindex="0" role="button" data-i18n-tip="s2.minAreaTip" aria-label="Що робить мін. площа" data-tip="Комірки меншої площі відкидаються. У % від усього зображення. Підвищ — щоб відсіяти дрібні плями, шум і цифри всередині клітинок. Занизь — щоб ловити дуже маленькі комірки.">?</span>
+          </div>
+          <input type="range" id="minAreaSlider" min="1" max="500" step="1" value="10">
+
+          <div class="slider-head">
+            <label class="field-label" for="maxAreaSlider"><span data-i18n="s2.maxArea">Макс. площа комірки:</span> <span id="maxAreaVal">5.00</span>%</label>
+            <span class="help-tip" tabindex="0" role="button" data-i18n-tip="s2.maxAreaTip" aria-label="Що робить макс. площа" data-tip="Комірки більшої площі відкидаються. У % від усього зображення. Зниж — якщо детектор помилково бере весь стіл або об'єднаний блок за одну «комірку». Якщо таблиця на все фото — можна підняти.">?</span>
+          </div>
+          <input type="range" id="maxAreaSlider" min="50" max="5000" step="10" value="500">
+
+          <div class="slider-head">
+            <label class="field-label" for="blockSizeSlider"><span data-i18n="s2.blockSize">Вікно адаптивного порогу:</span> <span id="blockSizeVal">35</span></label>
+            <span class="help-tip" tabindex="0" role="button" data-i18n-tip="s2.blockSizeTip" aria-label="Що робить вікно адаптивного порогу" data-tip="Розмір локальної ділянки (в пікселях), у межах якої окремо визначається «лінія чи фон». Більше значення — стійкіше до тіней і нерівного освітлення, але гірше тримає тонкі лінії. Менше — краще для тонких чітких ліній, але чутливіше до шуму. Має бути непарним. Орієнтир: товщина ліній таблиці.">?</span>
+          </div>
+          <input type="range" id="blockSizeSlider" min="3" max="101" step="2" value="35">
+
+          <div class="slider-head">
+            <label class="field-label" for="closeKXSlider"><span data-i18n="s2.closeX">Закриття по горизонталі:</span> <span id="closeKXVal">1</span><span class="kunit">px</span></label>
+            <span class="help-tip" tabindex="0" role="button" data-i18n-tip="s2.closeXTip" aria-label="Що робить закриття по горизонталі" data-tip="Розмір ядра закриття по горизонталі, у пікселях. 1 (типово) = без ефекту: комірки беруться як є. 3 — закриває дрібні розриви в горизонтальних лініях (пунктир, бліді ділянки). Вище 5-7 на звичайному фото вже занадто: сусідні комірки злипаються, і детектор бачить одну велику область замість кількох.">?</span>
+          </div>
+          <input type="range" id="closeKXSlider" min="1" max="9" step="2" value="1">
+
+          <div class="slider-head">
+            <label class="field-label" for="closeKYSlider"><span data-i18n="s2.closeY">Закриття по вертикалі:</span> <span id="closeKYVal">1</span><span class="kunit">px</span></label>
+            <span class="help-tip" tabindex="0" role="button" data-i18n-tip="s2.closeYTip" aria-label="Що робить закриття по вертикалі" data-tip="Розмір ядра закриття по вертикалі, у пікселях. 1 (типово) = без ефекту. 3 — допомагає, якщо горизонтальні лінії бліді й рядки «не закриваються». Вище 5-7 — рядки злипаються в один і кількість комірок різко падає.">?</span>
+          </div>
+          <input type="range" id="closeKYSlider" min="1" max="9" step="2" value="1">
+        </div>
+      </div>
+
+      <div class="step-panel hidden" id="step3">
+        <h2 data-i18n="step3.title">Розпізнавання</h2>
+
+        <div class="field">
+          <label class="field-label" data-i18n="s3.mask">Маска</label>
+          <div class="row">
+            <select id="maskSelect"></select>
+            <button class="btn btn-outline" id="addMaskBtn" data-i18n="s3.addMask">➕ Додати маску</button>
+            <button class="btn" id="editMaskBtn" style="display:none" data-i18n="s3.editMask">✏️ Редагувати маску</button>
+            <button class="btn" id="deleteMaskBtn" style="display:none" data-i18n-title="s3.deleteMaskTitle" title="Видалити маску">🗑</button>
+            <button class="btn btn-primary" id="verifyMaskBtn" style="display:none" data-i18n="s3.verifyMask">🔁 Перевірити маскою</button>
+            <button class="btn btn-outline" id="applyReplacesBtn" style="display:none" data-i18n="s3.applyReplaces">🔄 Застосувати заміни</button>
+          </div>
+          <p class="hint" id="maskHint" data-i18n="s3.maskHint">Маска задає дозволений формат значень у кожній комірці для перевірки результатів ШІ.</p>
+        </div>
+
+        <div class="field">
+          <label class="field-label" data-i18n="s3.ocr">OCR через Google Gemini</label>
+          <input type="password" id="geminiKey" data-i18n-aria="s3.keyPh" aria-label="API-ключ Google AI Studio" data-i18n-ph="s3.keyPh" placeholder="Встав API-ключ Google AI Studio" autocomplete="off">
+          <button class="btn btn-primary" id="ocrBtn" data-i18n="s3.ocrBtn">🔍 Розпізнати (OCR)</button>
+          <button class="btn btn-outline" id="ocrAllBtn" style="display:none" data-i18n="s3.ocrAll">🔍 Розпізнати всі</button>
+          <div class="ocr-status" id="ocrStatus" style="display:none"></div>
+          <p class="hint" data-i18n="s3.ocrHint">Безкоштовний ліміт Google AI Studio. Ключ лишається в браузері (не надсилається нікуди, крім API Google).</p>
+        </div>
+
+        <div class="field">
+          <div class="metrics" id="metrics" style="display:none">
+            <div class="metric"><span class="metric-num" id="mTotal">0</span><span data-i18n="s3.total">всього</span></div>
+            <div class="metric"><span class="metric-num" id="mAuto">0</span><span data-i18n="s3.auto">авто</span></div>
+            <div class="metric"><span class="metric-num" id="mProblem">0</span><span data-i18n="s3.problems">проблем</span></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <button class="btn btn-primary" id="overlayBtn" style="display:none" data-i18n="s3.overlay">🖼 Накласти текст</button>
+          <button class="btn btn-outline" id="editCellBtn" style="display:none" data-i18n="s3.editCell">✏️ Редагувати комірку</button>
+          <button class="btn btn-outline" id="reOcrCellBtn" style="display:none" data-i18n="s3.reOcrCell">🔄 Перерозпізнати комірку (ШІ)</button>
+        </div>
+
+        <div class="field" id="problemCells"></div>
+      </div>
+
+      <div class="step-panel hidden" id="step4">
+        <h2 data-i18n="step4.title">Експорт</h2>
+        <div class="field">
+          <button class="btn btn-primary" id="exportCsvBtn" style="display:none" data-i18n="s4.csv">📄 Експортувати CSV</button>
+          <button class="btn btn-primary" id="downloadPngBtn" style="display:none" data-i18n="s4.png">⬇️ Накладене зображення</button>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Модальне вікно редагування комірки -->
+  <div class="modal-overlay" id="cellModal" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <span id="cellModalTitle" data-i18n="cell.title">Комірка</span>
+        <button class="modal-close" id="cellModalClose" data-i18n-title="common.close" title="Закрити" aria-label="Закрити">✕</button>
+      </div>
+      <div class="modal-body">
+        <img class="modal-img" id="cellModalImg" alt="Комірка">
+        <input type="text" class="modal-input" id="cellModalInput" data-i18n-aria="s3.cellInputAria" aria-label="Значення комірки" autocomplete="off">
+        <p class="hint" data-i18n="cell.hint">Відредагуйте значення та натисніть Enter для підтвердження.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальне вікно редактора маски -->
+  <div class="modal-overlay" id="maskModal" style="display:none">
+    <div class="modal mask-modal">
+      <div class="modal-header">
+        <span id="maskModalTitle" data-i18n="mask.title">Редактор маски</span>
+        <button class="modal-close" id="maskModalClose" data-i18n-title="common.close" title="Закрити" aria-label="Закрити">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label class="field-label" data-i18n="mask.name">Назва маски</label>
+          <input type="text" id="maskNameInput" data-i18n-aria="mask.name" aria-label="Назва маски" class="modal-input" data-i18n-ph="mask.namePh" placeholder="Назва маски" autocomplete="off">
+        </div>
+        <div class="field">
+          <label class="field-label" data-i18n="mask.cells">Комірки (клік — одна комірка, протягни — діапазон)</label>
+          <div class="mask-canvas-wrap">
+            <canvas id="maskCanvas"></canvas>
+            <div class="placeholder" id="maskPlaceholder"><p data-i18n="mask.noCells">Спочатку розпізнайте комірки (крок 2→3)</p></div>
+          </div>
+          <p class="hint" id="maskSelectedCell" data-i18n="mask.noSelection">Не вибрано комірку.</p>
+        </div>
+        <div class="field" id="maskRulePanel">
+          <label class="field-label" data-i18n="mask.allowed">Дозволені символи</label>
+          <div class="row mask-chars">
+            <label class="checkbox"><input type="checkbox" id="maskDigitChk" data-i18n-aria="mask.digits" aria-label="mask.digits" data-class="\\d"> <span data-i18n="mask.digits">Цифри</span></label>
+            <label class="checkbox"><input type="checkbox" id="maskLetterChk" data-i18n-aria="mask.letters" aria-label="mask.letters" data-class="a-zа-я"> <span data-i18n="mask.letters">Букви</span></label>
+            <label class="checkbox"><input type="checkbox" id="maskSignChk" data-i18n-aria="mask.signs" aria-label="mask.signs" data-class="\\s.,\\-/+()"> <span data-i18n="mask.signs">Знаки</span></label>
+            <label class="checkbox"><input type="checkbox" id="maskAnyChk" data-i18n-aria="mask.any" aria-label="mask.any" data-class="any"> <span data-i18n="mask.any">Будь-що</span></label>
+          </div>
+          <label class="field-label" data-i18n="mask.regexManual">Або регулярний вираз вручну</label>
+          <input type="text" id="maskRegexInput" data-i18n-aria="mask.regexManual" aria-label="Регулярний вираз" class="modal-input" data-i18n-ph="mask.regexPh" placeholder="напр. \\d\\d/\\d\\d" autocomplete="off">
+          <p class="hint" id="maskRegexPreview"></p>
+        </div>
+        <div class="field">
+          <label class="field-label" data-i18n="mask.replaces">Заміна символів (автоматично)</label>
+          <textarea id="maskReplaceInput" class="mask-replace-input" rows="3" placeholder="O=0&#10;l=1&#10;,=." autocomplete="off"></textarea>
+          <p class="hint" data-i18n-html="mask.replacesHint">Один запис на рядок у форматі <b>ЩО=НА ЩО</b>. Приклад: <code>O=0</code> замінить усі букви O на цифру 0, <code>,=.</code> — коми на крапки. Заміна виконується перед перевіркою маскою.</p>
+          <details class="mask-regex-guide">
+            <summary data-i18n="mask.replacesGuide">❓ Підказки по заміні</summary>
+            <div class="regex-guide-body">
+              <p class="hint" data-i18n="mask.replacesCommon">Часті помилки OCR і як їх виправити:</p>
+              <table class="regex-table">
+                <thead><tr><th data-i18n="mask.thRecord">Запис</th><th data-i18n="mask.thAction">Що робить</th></tr></thead>
+                <tbody>
+                  <tr><td><code>O=0</code></td><td data-i18n="mask.row.oLetter">букву «O» → цифра «0»</td></tr>
+                  <tr><td><code>l=1</code></td><td data-i18n="mask.row.lLetter">букву «l» → цифра «1»</td></tr>
+                  <tr><td><code>І=1</code></td><td data-i18n="mask.row.iCyr">кириличну «І» → цифра «1»</td></tr>
+                  <tr><td><code>,=.</code></td><td data-i18n="mask.row.commaToDot">кома → крапка (для чисел)</td></tr>
+                  <tr><td><code>.=,</code></td><td data-i18n="mask.row.dotToComma">крапка → кома (для чисел)</td></tr>
+                  <tr><td><code> =</code></td><td data-i18n="mask.row.dotToSpace">пробіл → нічого (видалити пробіли)</td></tr>
+                  <tr><td><code>- =</code></td><td data-i18n="mask.row.dashSpace">дефіс+пробіл → нічого (видалити)</td></tr>
+                  <tr><td><code>№=N</code></td><td data-i18n="mask.row.numSign">символ «№» → буква «N»</td></tr>
+                </tbody>
+              </table>
+              <p class="hint" data-i18n-html="mask.replacesFooter">Можна кілька рядків — вони застосовуються по черзі згори вниз. Символ <code>=</code> — розділювач «що → на що». Щоб видалити символи, лишіть праву частину порожньою: <code> =</code> або <code>-=</code>.</p>
+            </div>
+          </details>
+        </div>
+        <details class="mask-regex-guide">
+          <summary data-i18n="mask.regexGuide">❓ Гайд по регулярних виразах</summary>
+          <div class="regex-guide-body">
+            <p class="hint" data-i18n="mask.regexIntro">Вираз перевіряє значення комірки ПОВНІСТЮ (від початку до кінця). Ось прості шаблони:</p>
+            <table class="regex-table">
+              <thead><tr><th data-i18n="mask.thRegex">Вираз</th><th data-i18n="mask.thMeaning">Що означає</th><th data-i18n="mask.thExample">Приклад збігу</th></tr></thead>
+              <tbody>
+                <tr><td><code>\d</code></td><td data-i18n="regex.r.digit">будь-яка цифра (0–9)</td><td><code>7</code></td></tr>
+                <tr><td><code>\d+</code></td><td data-i18n="regex.r.digitPlus">одна або більше цифр</td><td><code>1500</code></td></tr>
+                <tr><td><code>\d{2}</code></td><td data-i18n="regex.r.digit2">рівно 2 цифри</td><td><code>12</code></td></tr>
+                <tr><td><code>\d{4}</code></td><td data-i18n="regex.r.digit4">рівно 4 цифри</td><td><code>2024</code></td></tr>
+                <tr><td><code>[a-zA-Z]</code></td><td data-i18n="regex.r.latin">одна латинська буква</td><td><code>A</code>, <code>z</code></td></tr>
+                <tr><td><code>[а-яА-Я]</code></td><td data-i18n="regex.r.cyr">одна кирилична буква</td><td><code>І</code>, <code>я</code></td></tr>
+                <tr><td><code>[A-Z]{2}-\d{3}</code></td><td data-i18n="regex.r.code">2 букви, дефіс, 3 цифри</td><td><code>AB-123</code></td></tr>
+                <tr><td><code>\d\d\/\d\d</code></td><td data-i18n="regex.r.slash">цифра-цифра / цифра-цифра</td><td><code>15/30</code></td></tr>
+                <tr><td><code>\d{2}\.\d{2}\.\d{4}</code></td><td data-i18n="regex.r.date">дата дд.мм.рррр</td><td><code>12.05.2024</code></td></tr>
+                <tr><td><code>\d+(\.\d{2})?</code></td><td data-i18n="regex.r.number">число, дріб опційно</td><td><code>1500</code>, <code>1500.50</code></td></tr>
+                <tr><td><code>.*</code></td><td data-i18n="regex.r.any">будь-що (без обмежень)</td><td><code>text</code></td></tr>
+              </tbody>
+            </table>
+            <p class="hint" data-i18n-html="mask.regexFooter">Спецсимволи <code>. + * ? / \ - ( )</code> у виразі слід екранувати бекслешем: <code>\.</code> — крапка, <code>\/</code> — слеш, <code>\-</code> — дефіс.</p>
+          </div>
+        </details>
+        <div class="row mask-actions">
+          <button class="btn btn-outline" id="maskLoadFileBtn" data-i18n="mask.loadFile">📂 Завантажити як файл</button>
+          <input type="file" id="maskFileInput" accept=".json,application/json" style="display:none">
+          <button class="btn btn-outline" id="maskDownloadBtn" data-i18n="mask.download">⬇️ Скачати маску</button>
+          <button class="btn btn-primary" id="maskSaveBtn" data-i18n="mask.save">💾 Зберегти</button>
+          <button class="btn" id="maskCancelBtn" data-i18n="mask.cancel">Скасувати</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="https://docs.opencv.org/4.9.0/opencv.js" id="opencvScript" async></script>
+  <script src="js/crop.js?v=20261110s"></script>
+  <script src="js/perspective.js?v=20261110s"></script>
+  <script src="js/cell-editor.js?v=20261110s"></script>
+  <script src="js/image-processing.js?v=20261110s"></script>
+  <script src="js/mask.js?v=20261110s"></script>
+  <!-- Оверлей drag & drop: кидок зображень будь-де на сторінці -->
+  <div class="drop-overlay" id="dropOverlay">
+    <div class="drop-box">
+      <div class="drop-icon">🖼</div>
+      <div class="drop-title" data-i18n="drop.title">Відпусти, щоб додати зображення</div>
+      <div class="drop-hint" data-i18n="drop.hint">Можна кидати кілька файлів одразу — кожен стане окремим кадром</div>
+    </div>
+  </div>
+
+  <script src="js/i18n.js?v=20261110s"></script>
+  <script src="js/app.js?v=20261110s"></script>
+</body>
+</html>
